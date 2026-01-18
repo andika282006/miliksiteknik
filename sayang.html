@@ -1,0 +1,513 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>System.Love.Log</title>
+    <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;700&display=swap" rel="stylesheet">
+    <style>
+        /* CSS RESET & VARS */
+        :root {
+            --bg-color: #0d1117;
+            --term-green: #00ff41;
+            --term-blue: #58a6ff;
+            --term-pink: #ff79c6;
+            --term-text: #c9d1d9;
+            --glass: rgba(22, 27, 34, 0.85);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            background-color: var(--bg-color);
+            color: var(--term-text);
+            font-family: 'Fira Code', monospace;
+            overflow-x: hidden;
+            min-height: 100vh;
+        }
+
+        /* BACKGROUND MATRIX CANVAS */
+        canvas {
+            display: block;
+            position: fixed;
+            top: 0;
+            left: 0;
+            z-index: 0;
+            opacity: 0.3; /* Supaya teks utama tetap terbaca */
+        }
+
+        /* LAYAR PEMBUKA (BOOT SEQUENCE) */
+        #boot-screen {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: black;
+            z-index: 9999;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+            text-align: left;
+        }
+
+        .cmd-text {
+            color: var(--term-green);
+            font-size: 0.9rem;
+            margin-bottom: 10px;
+            width: 100%;
+            max-width: 400px;
+        }
+
+        .blink {
+            animation: blinker 1s linear infinite;
+        }
+
+        @keyframes blinker { 50% { opacity: 0; } }
+
+        .btn-access {
+            margin-top: 20px;
+            background: transparent;
+            border: 1px solid var(--term-green);
+            color: var(--term-green);
+            padding: 10px 25px;
+            font-family: 'Fira Code', monospace;
+            cursor: pointer;
+            transition: 0.3s;
+        }
+
+        .btn-access:hover {
+            background: var(--term-green);
+            color: black;
+            box-shadow: 0 0 15px var(--term-green);
+        }
+
+        /* CONTAINER UTAMA (TERMINAL WINDOW) */
+        .terminal-container {
+            position: relative;
+            z-index: 10;
+            max-width: 650px;
+            margin: 20px auto;
+            background: var(--glass);
+            border: 1px solid #30363d;
+            border-radius: 6px;
+            box-shadow: 0 0 20px rgba(0, 255, 65, 0.1);
+            backdrop-filter: blur(5px);
+            min-height: 90vh;
+            display: none; /* Hidden by default until access granted */
+            animation: fadeIn 1s forwards;
+        }
+
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+
+        /* HEADER */
+        .term-header {
+            background: #161b22;
+            padding: 10px 15px;
+            border-bottom: 1px solid #30363d;
+            display: flex;
+            gap: 8px;
+            border-radius: 6px 6px 0 0;
+        }
+
+        .dot { width: 12px; height: 12px; border-radius: 50%; }
+        .red { background: #ff5f56; }
+        .yellow { background: #ffbd2e; }
+        .green { background: #27c93f; }
+        .title-bar { margin-left: 10px; font-size: 0.8rem; color: #8b949e; display: flex; align-items: center;}
+
+        .content {
+            padding: 20px;
+        }
+
+        .code-line {
+            display: block;
+            margin-bottom: 5px;
+            font-size: 0.9rem;
+        }
+
+        .keyword { color: var(--term-pink); }
+        .variable { color: var(--term-blue); }
+        .string { color: #a5d6ff; }
+        .comment { color: #8b949e; font-style: italic; }
+
+        h1 {
+            font-size: 1.5rem;
+            margin: 20px 0;
+            line-height: 1.4;
+            color: var(--term-green);
+            text-shadow: 0 0 5px rgba(0, 255, 65, 0.5);
+            min-height: 60px; /* Space for typing */
+        }
+
+        /* GRID FOTO */
+        .grid-system {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 15px;
+            margin-top: 30px;
+        }
+
+        .file-card {
+            background: #0d1117;
+            border: 1px solid #30363d;
+            border-radius: 4px;
+            overflow: hidden;
+            cursor: pointer;
+            transition: 0.3s;
+            position: relative;
+        }
+
+        .file-card:hover {
+            border-color: var(--term-blue);
+            transform: translateY(-3px);
+            box-shadow: 0 5px 15px rgba(88, 166, 255, 0.2);
+        }
+
+        .file-card img {
+            width: 100%;
+            height: 160px;
+            object-fit: cover;
+            filter: grayscale(80%) contrast(1.2); /* Efek redup/teknikal */
+            transition: 0.5s;
+        }
+
+        .file-card:hover img {
+            filter: grayscale(0%) contrast(1);
+        }
+
+        .file-info {
+            padding: 8px;
+            font-size: 0.75rem;
+            border-top: 1px solid #30363d;
+            background: #161b22;
+        }
+
+        /* MODAL (POPUP) */
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.9);
+            z-index: 1000;
+            display: none;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+
+        .sys-msg {
+            background: #161b22;
+            border: 1px solid var(--term-green);
+            padding: 20px;
+            width: 100%;
+            max-width: 400px;
+            box-shadow: 0 0 30px rgba(0, 255, 65, 0.15);
+            position: relative;
+        }
+
+        .sys-msg::before {
+            content: "SYSTEM MESSAGE";
+            position: absolute;
+            top: -10px;
+            left: 10px;
+            background: #161b22;
+            padding: 0 5px;
+            color: var(--term-green);
+            font-size: 0.8rem;
+        }
+
+        .modal-img {
+            width: 100%;
+            border-radius: 4px;
+            border: 1px solid #30363d;
+            margin-bottom: 15px;
+        }
+
+        .modal-text {
+            color: var(--term-text);
+            margin-bottom: 15px;
+            line-height: 1.5;
+        }
+
+        .btn-close {
+            background: var(--term-green);
+            color: #000;
+            border: none;
+            padding: 8px 15px;
+            font-weight: bold;
+            font-family: 'Fira Code', monospace;
+            cursor: pointer;
+            width: 100%;
+        }
+
+        /* MUSIC PLAYER */
+        .music-terminal {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            background: #0d1117;
+            border: 1px solid var(--term-pink);
+            padding: 10px;
+            font-size: 0.8rem;
+            z-index: 100;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            box-shadow: 0 0 10px rgba(255, 121, 198, 0.3);
+        }
+
+        .equalizer {
+            display: flex;
+            gap: 2px;
+            height: 15px;
+            align-items: flex-end;
+        }
+
+        .bar {
+            width: 3px;
+            background: var(--term-pink);
+            animation: bounce 0.5s infinite;
+        }
+
+        .bar:nth-child(2) { animation-delay: 0.1s; }
+        .bar:nth-child(3) { animation-delay: 0.2s; }
+        .paused .bar { animation: none; height: 2px; }
+
+        @keyframes bounce {
+            0%, 100% { height: 2px; }
+            50% { height: 15px; }
+        }
+
+    </style>
+</head>
+<body>
+
+    <div id="boot-screen">
+        <div class="cmd-text">> Initializing connection...</div>
+        <div class="cmd-text">> Loading assets...</div>
+        <div class="cmd-text">> Accessing heart database...</div>
+        <div class="cmd-text">> <span style="color:red">Warning: High levels of prettiness detected.</span></div>
+        <br>
+        <button class="btn-access" onclick="startSystem()">[ EXECUTE PROGRAM ]</button>
+    </div>
+
+    <canvas id="matrix"></canvas>
+
+    <div class="terminal-container" id="main-terminal">
+        <div class="term-header">
+            <div class="dot red"></div>
+            <div class="dot yellow"></div>
+            <div class="dot green"></div>
+            <div class="title-bar">root@heart: ~/project-love</div>
+        </div>
+        
+        <div class="content">
+            <div class="code-line">
+                <span class="keyword">const</span> <span class="variable">user</span> = <span class="string">"MyGirlfriend"</span>;
+            </div>
+            <div class="code-line">
+                <span class="keyword">let</span> <span class="variable">status</span> = <span class="string">"Forever"</span>;
+            </div>
+            <br>
+            
+            <h1 id="typing-header"></h1>
+            
+            <p class="comment">// Pap dari SiCantik Dewikuu...</p>
+
+            <div class="grid-system" id="gallery-grid">
+                </div>
+
+            <div style="margin-top: 30px; border-top: 1px dashed #30363d; padding-top: 10px; font-size: 0.8rem; text-align: center; color: #586069;">
+                &lt;/&gt; with code & love by <span style="color:var(--term-green)">Dikaa</span>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal-overlay" id="modal" onclick="closeModal()">
+        <div class="sys-msg" onclick="event.stopPropagation()">
+            <img src="" class="modal-img" id="modal-img">
+            <div class="code-line" style="margin-bottom: 10px;">
+                <span class="keyword">console</span>.log(<span class="string" id="modal-text"></span>);
+            </div>
+            <button class="btn-close" onclick="closeModal()">CLOSE_WINDOW();</button>
+        </div>
+    </div>
+
+    <audio id="bg-music" loop>
+        <source src="DJ SUDAH TERBIASA TERJADI TANTE TEMAN DATANG KETIKA BUTUH SAJA VIRAL TIKTOK TERBARU 2025.mp3" type="audio/mpeg">
+    </audio>
+
+    <div class="music-terminal" onclick="toggleMusic()">
+        <div class="equalizer paused" id="eq-bars">
+            <div class="bar"></div>
+            <div class="bar"></div>
+            <div class="bar"></div>
+        </div>
+        <span id="music-status">MUSIC: OFF</span>
+    </div>
+
+    <script>
+        // --- KONFIGURASI DATA (EDIT BAGIAN INI) ---
+        const config = {
+            typingTitle: "Si Cantik Milik Si Teknik",
+            gallery: [
+                {
+                    img: "foto/foto1.jpeg",
+                    caption: "Error 404: Flaw not found. geulis pisannn!"
+                },
+                {
+                    img: "foto/foto2.jpeg",
+                    caption: "milik si teknik informatika #ITGBOYS."
+                },
+                {
+                    img: "foto/foto3.jpeg",
+                    caption: "Cintaku padamu: while(alive) { love++ }"
+                },
+                {
+                    img: "foto/foto4.jpeg",
+                    caption: "#mytype #mylove."
+                }
+            ]
+        };
+
+        // --- MATRIX RAIN EFFECT ---
+        const canvas = document.getElementById('matrix');
+        const ctx = canvas.getContext('2d');
+
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
+
+        const katakana = 'アァカサタナハマヤャラワガザダバパイィキシチニヒミリヂギジヂビピウゥクスツヌフムユュルグズブヅプエェケセテネヘメレゲゼデベペオォコソトノホモヨョロヲゴゾドボポ1234567890ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+        const characters = katakana.split('');
+
+        const fontSize = 16;
+        const columns = canvas.width/fontSize;
+        const drops = [];
+
+        for(let x = 0; x < columns; x++) drops[x] = 1;
+
+        function drawMatrix() {
+            ctx.fillStyle = 'rgba(13, 17, 23, 0.05)';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            ctx.fillStyle = '#0F0'; // Green text
+            ctx.font = fontSize + 'px monospace';
+
+            for(let i = 0; i < drops.length; i++) {
+                const text = characters[Math.floor(Math.random()*characters.length)];
+                ctx.fillText(text, i*fontSize, drops[i]*fontSize);
+
+                if(drops[i]*fontSize > canvas.height && Math.random() > 0.975)
+                    drops[i] = 0;
+                drops[i]++;
+            }
+        }
+        setInterval(drawMatrix, 33);
+
+        // --- LOGIKA SYSTEM ---
+        const bootScreen = document.getElementById('boot-screen');
+        const mainTerminal = document.getElementById('main-terminal');
+        const audio = document.getElementById('bg-music');
+        const musicStatus = document.getElementById('music-status');
+        const eqBars = document.getElementById('eq-bars');
+
+        function startSystem() {
+            bootScreen.style.display = 'none';
+            mainTerminal.style.display = 'block';
+            
+            // Start Music
+            audio.volume = 0.5;
+            audio.play().then(() => {
+                musicStatus.innerText = "MUSIC: ON";
+                eqBars.classList.remove('paused');
+            }).catch(() => {
+                musicStatus.innerText = "MUSIC: ERR (Click Me)";
+            });
+
+            // Start Typing Effect
+            typeWriter(config.typingTitle, "typing-header");
+            renderGallery();
+        }
+
+        // Fungsi Ketik Otomatis
+        function typeWriter(text, elementId) {
+            let i = 0;
+            const element = document.getElementById(elementId);
+            element.innerHTML = "";
+            function type() {
+                if (i < text.length) {
+                    element.innerHTML += text.charAt(i);
+                    i++;
+                    setTimeout(type, 100);
+                } else {
+                    element.innerHTML += '<span class="blink">_</span>';
+                }
+            }
+            type();
+        }
+
+        // Render Galeri
+        function renderGallery() {
+            const container = document.getElementById('gallery-grid');
+            config.gallery.forEach((item, index) => {
+                const card = document.createElement('div');
+                card.className = 'file-card';
+                card.onclick = () => showModal(item.img, item.caption);
+                
+                card.innerHTML = `
+                    <img src="${item.img}" alt="Asset_${index}">
+                    <div class="file-info">
+                        <span class="variable">const</span> mem_${index} = <span class="string">"secret_file.jpg"</span>
+                    </div>
+                `;
+                container.appendChild(card);
+            });
+        }
+
+        // Modal Logic
+        const modal = document.getElementById('modal');
+        const modalImg = document.getElementById('modal-img');
+        const modalText = document.getElementById('modal-text');
+
+        function showModal(src, text) {
+            modalImg.src = src;
+            modalText.innerText = text;
+            modal.style.display = 'flex';
+        }
+
+        function closeModal() {
+            modal.style.display = 'none';
+        }
+
+        // Music Toggle
+        function toggleMusic() {
+            if(audio.paused) {
+                audio.play();
+                musicStatus.innerText = "MUSIC: ON";
+                eqBars.classList.remove('paused');
+            } else {
+                audio.pause();
+                musicStatus.innerText = "MUSIC: PAUSED";
+                eqBars.classList.add('paused');
+            }
+        }
+
+        // Handle Resize untuk Matrix Rain
+        window.addEventListener('resize', () => {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+        });
+
+    </script>
+</body>
+</html>
